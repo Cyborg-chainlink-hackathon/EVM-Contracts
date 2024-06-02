@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.19;
 
 import {TaskScheduleOracle} from "./TaskScheduleOracle.sol";
 import {WorkerRegistration} from "./WorkerRegistration.sol";
 
 contract TaskScheduling {
     WorkerRegistration workerRegistry;
-    FunctionsConsumerExample oracle;
+    TaskScheduleOracle oracle;
 
     enum TaskStatus { InProcess, Scheduled }
 
@@ -25,11 +25,11 @@ contract TaskScheduling {
 
     constructor(address workerRegistryAddress, address oracleAddress) {
         workerRegistry = WorkerRegistration(workerRegistryAddress);
-        oracle = FunctionsConsumerExample(oracleAddress);
+        oracle = TaskScheduleOracle(oracleAddress);
     }
 
     function scheduleTask(string memory dockerImage) public {
-        address workerAddress = workerRegistry.getRandomWorker();
+        address workerAddress = workerRegistry.requestRandomWorker(false);
         require(workerAddress != address(0));
         Task memory newTask = Task({
             workerAddress: workerAddress,
@@ -76,6 +76,3 @@ contract TaskScheduling {
         emit TaskStatusUpdated(taskId, TaskStatus.Scheduled);
     }
 }
-
-
-//deployed: 0x14c27f300f74901CC54755291890311Bb281aBd1
