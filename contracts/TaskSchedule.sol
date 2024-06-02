@@ -45,7 +45,8 @@ contract TaskScheduling {
         args[1] = addressToString(workerAddress);
 
         oracle.sendRequest(
-            args
+            args,
+            taskCounter
         );
 
         emit TaskScheduled(taskCounter, workerAddress, dockerImage, TaskStatus.InProcess);
