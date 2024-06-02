@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {FunctionsConsumerExample} from "./TaskScheduleOracle.sol";
+import {TaskScheduleOracle} from "./TaskScheduleOracle.sol";
 import {WorkerRegistration} from "./WorkerRegistration.sol";
 
 contract TaskScheduling {
@@ -19,7 +19,6 @@ contract TaskScheduling {
 
     uint256 public taskCounter;
     mapping(uint256 => Task) public tasks;
-    string sourceCode = "async function downloadFromIPFS(){const ipfsResponse=await Functions.makeHttpRequest({url:args[0],method:'GET',headers:{'Content-Type':'application/json'}});if(ipfsResponse.error){throw new Error('Error downloading file from IPFS');}return ipfsResponse.data;}async function decryptData(encryptedData){const response=await Functions.makeHttpRequest({url:`http://${args[3]}:3000/decrypt`,method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},data:{data:encryptedData,key:args[2]}});if(response.error){throw new Error('Error decrypting data');}const decryptedData=JSON.parse(JSON.stringify(response.data));return decryptedData;}async function initiateCompute(imageSrc,ipAddress){const url_d=`http://${ipAddress}:3001/deploy`;const response=await Functions.makeHttpRequest({url:url_d,method:'POST',headers:{Accept:'application/json','Content-Type':'application/json'},data:{src:imageSrc}});if(response.error){throw new Error('Error decrypting data');}return response.data;}const encryptedJson=await downloadFromIPFS();const decryptedJson=await decryptData(JSON.parse(JSON.stringify(encryptedJson)));const deploymentStatus=await initiateCompute(args[1],decryptedJson.ipAddress.trim());return Functions.encodeString(deploymentStatus.message);";
 
     event TaskScheduled(uint256 indexed taskId, address indexed workerAddress, string dockerImage, TaskStatus status);
     event TaskStatusUpdated(uint256 indexed taskId, TaskStatus status);
@@ -29,8 +28,9 @@ contract TaskScheduling {
         oracle = FunctionsConsumerExample(oracleAddress);
     }
 
-    function scheduleTask(string memory ipfsURI, string memory dockerImage, ) public {
+    function scheduleTask(string memory dockerImage) public {
         address workerAddress = workerRegistry.getRandomWorker();
+        require(workerAddress != address(0));
         Task memory newTask = Task({
             workerAddress: workerAddress,
             creator: msg.sender,
@@ -41,17 +41,28 @@ contract TaskScheduling {
         tasks[taskCounter] = newTask;
 
         string[] memory args = new string[](2);
-        bytes[] memory emptyArgs = new bytes[](0);
-        args[0] = ipfsURI;
-        args[1] = dockerImage;
-        //args[2] should be public address of the worker
+        args[0] = dockerImage;
+        args[1] = addressToString(workerAddress);
 
         oracle.sendRequest(
-            sourceCode,
             args
         );
 
         emit TaskScheduled(taskCounter, workerAddress, dockerImage, TaskStatus.InProcess);
+    }
+
+    function addressToString(address _addr) internal pure returns (string memory) {
+        bytes memory addressBytes = abi.encodePacked(_addr);
+        bytes memory hexAlphabet = "0123456789abcdef";
+
+        bytes memory str = new bytes(2 + addressBytes.length * 2);
+        str[0] = "0";
+        str[1] = "x";
+        for (uint256 i = 0; i < addressBytes.length; i++) {
+            str[2 + i * 2] = hexAlphabet[uint8(addressBytes[i] >> 4)];
+            str[3 + i * 2] = hexAlphabet[uint8(addressBytes[i] & 0x0f)];
+        }
+        return string(str);
     }
 
     function updateTaskStatus(uint256 taskId, TaskStatus status) public {
@@ -60,19 +71,11 @@ contract TaskScheduling {
         emit TaskStatusUpdated(taskId, status);
     }
 
-    function stringToBytes32(string memory source) public pure returns (bytes32 result) {
-        bytes memory tempEmptyStringTest = bytes(source);
-        if (tempEmptyStringTest.length == 0) {
-            return 0x0;
-        }
-
-        assembly {
-            result := mload(add(source, 32))
-        }
-    }
-
     function fulfillTask(uint256 taskId) public {
         tasks[taskId].status = TaskStatus.Scheduled;
         emit TaskStatusUpdated(taskId, TaskStatus.Scheduled);
     }
 }
+
+
+//deployed: 0x14c27f300f74901CC54755291890311Bb281aBd1
